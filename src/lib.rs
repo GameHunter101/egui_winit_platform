@@ -21,7 +21,7 @@ use winit::{
         TouchPhase,
         WindowEvent::{self, *},
     },
-    window::CursorIcon,
+    cursor::CursorIcon,
 };
 
 /// Configures the creation of the `Platform`.
@@ -125,11 +125,11 @@ impl Platform {
             // See: https://github.com/rust-windowing/winit/issues/208
             // There is nothing to do for minimize events, so it is ignored here. This solves an issue where
             // egui window positions would be changed when minimizing on Windows.
-            Resized(PhysicalSize {
+            SurfaceResized(PhysicalSize {
                 width: 0,
                 height: 0,
             }) => {}
-            Resized(physical_size) => {
+            SurfaceResized(physical_size) => {
                 self.raw_input.screen_rect = Some(egui::Rect::from_min_size(
                     Default::default(),
                     vec2(physical_size.width as f32, physical_size.height as f32)
@@ -139,8 +139,8 @@ impl Platform {
             ScaleFactorChanged { scale_factor, .. } => {
                 self.scale_factor = *scale_factor;
             }
-            MouseInput { state, button, .. } => {
-                if let Some(button) = match button {
+            PointerButton { state, button, .. } => {
+                if let Some(button) = match button.clone().mouse_button().unwrap() {
                     MouseButton::Left => Some(egui::PointerButton::Primary),
                     MouseButton::Right => Some(egui::PointerButton::Secondary),
                     MouseButton::Middle => Some(egui::PointerButton::Middle),
@@ -157,7 +157,7 @@ impl Platform {
                     }
                 }
             }
-            Touch(touch) => {
+            /* Touch(touch) => {
                 let pointer_pos = pos2(
                     touch.location.x as f32 / self.scale_factor as f32,
                     touch.location.y as f32 / self.scale_factor as f32,
@@ -240,7 +240,7 @@ impl Platform {
                     });
                     self.raw_input.events.push(egui::Event::PointerGone);
                 }
-            }
+            } */
             MouseWheel { delta, .. } => {
                 let (mut delta, unit) = match delta {
                     winit::event::MouseScrollDelta::LineDelta(x, y) => {
@@ -262,7 +262,7 @@ impl Platform {
                     delta,
                 });
             }
-            CursorMoved { position, .. } => {
+            PointerMoved { position, .. } => {
                 let pointer_pos = pos2(
                     position.x as f32 / self.scale_factor as f32,
                     position.y as f32 / self.scale_factor as f32,
@@ -272,7 +272,7 @@ impl Platform {
                     .events
                     .push(egui::Event::PointerMoved(pointer_pos));
             }
-            CursorLeft { .. } => {
+            PointerLeft { .. } => {
                 self.pointer_pos = None;
                 self.raw_input.events.push(egui::Event::PointerGone);
             }
@@ -288,7 +288,7 @@ impl Platform {
                 if pressed
                     && !self
                         .modifier_state
-                        .intersects(ModifiersState::CONTROL | ModifiersState::SUPER)
+                        .intersects(ModifiersState::CONTROL | ModifiersState::META)
                 {
                     if let Some(ch) = &event.text {
                         let str: String = ch.chars().filter(|c| is_printable(*c)).collect();
@@ -332,11 +332,11 @@ impl Platform {
         match event {
             KeyboardInput { .. } | ModifiersChanged(_) => self.context().wants_keyboard_input(),
 
-            MouseWheel { .. } | MouseInput { .. } => self.context().wants_pointer_input(),
+            MouseWheel { .. } | PointerButton { .. } => self.context().wants_pointer_input(),
 
-            CursorMoved { .. } => self.context().is_using_pointer(),
+            PointerMoved { .. } => self.context().is_using_pointer(),
 
-            Touch { .. } => self.context().is_using_pointer(),
+            // Touch { .. } => self.context().is_using_pointer(),
 
             _ => false,
         }
@@ -355,7 +355,7 @@ impl Platform {
     /// Ends the frame. Returns what has happened as `Output` and gives you the draw instructions
     /// as `PaintJobs`. If the optional `window` is set, it will set the cursor key based on
     /// egui's instructions.
-    pub fn end_pass(&mut self, window: Option<&winit::window::Window>) -> egui::FullOutput {
+    pub fn end_pass(&mut self, window: Option<&dyn winit::window::Window>) -> egui::FullOutput {
         // otherwise the below line gets flagged by clippy if both clipboard and webbrowser features are disabled
         #[allow(clippy::let_and_return)]
         let output = self.context.end_pass();
@@ -366,7 +366,7 @@ impl Platform {
                 window.set_cursor_visible(true);
                 // if the pointer is located inside the window, set cursor icon
                 if self.pointer_pos.is_some() {
-                    window.set_cursor(cursor_icon);
+                    window.set_cursor(cursor_icon.into());
                 }
             } else {
                 window.set_cursor_visible(false);
@@ -412,7 +412,7 @@ fn winit_to_egui_key_code(key: &winit::keyboard::Key) -> Option<Key> {
         winit::keyboard::Key::Named(NamedKey::Backspace) => Key::Backspace,
         winit::keyboard::Key::Named(NamedKey::Enter) => Key::Enter,
         winit::keyboard::Key::Named(NamedKey::Tab) => Key::Tab,
-        winit::keyboard::Key::Named(NamedKey::Space) => Key::Space,
+        // winit::keyboard::Key::Named(NamedKey::Space) => Key::Space,
         winit::keyboard::Key::Named(NamedKey::F1) => Key::F1,
         winit::keyboard::Key::Named(NamedKey::F2) => Key::F2,
         winit::keyboard::Key::Named(NamedKey::F3) => Key::F3,
@@ -454,7 +454,7 @@ fn winit_to_egui_modifiers(modifiers: ModifiersState) -> egui::Modifiers {
         #[cfg(not(target_os = "macos"))]
         mac_cmd: false,
         #[cfg(not(target_os = "macos"))]
-        command: modifiers.super_key(),
+        command: modifiers.meta_key(),
     }
 }
 
